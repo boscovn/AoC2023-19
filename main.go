@@ -18,30 +18,54 @@ type workflow struct {
 	rules       []rule
 	destination string
 }
+type valRange struct {
+	minimum int
+	maximum int
+}
 
-func checkParts(workflows map[string]workflow, keyvals map[byte]int, key string) bool {
+func copyMap(origin map[byte]valRange) map[byte]valRange {
+	dest := make(map[byte]valRange)
+	for k, v := range origin {
+		dest[k] = v
+	}
+	return dest
+}
+
+func checkParts(workflows map[string]workflow, keyvals map[byte]valRange, key string) int {
 	if key == "A" {
-		return true
+		sum := 1
+		for _, v := range keyvals {
+			sum *= v.maximum - v.minimum + 1
+		}
+		return sum
 	}
 	if key == "R" {
-		return false
+		return 0
 	}
 	wf := workflows[key]
+	sum := 0
 	for _, r := range wf.rules {
-		checksOut := false
 		switch r.operator {
 		case '<':
-			checksOut = keyvals[r.key] < r.value
+			if keyvals[r.key].minimum < r.value {
+				newKeyvals := copyMap(keyvals)
+				newKeyvals[r.key] = valRange{minimum: keyvals[r.key].minimum, maximum: r.value - 1}
+				sum += checkParts(workflows, newKeyvals, r.destination)
+				keyvals[r.key] = valRange{minimum: r.value, maximum: keyvals[r.key].maximum}
+
+			}
 		case '>':
-			checksOut = keyvals[r.key] > r.value
-		case '=':
-			checksOut = keyvals[r.key] == r.value
+			if keyvals[r.key].maximum > r.value {
+				newKeyvals := copyMap(keyvals)
+				newKeyvals[r.key] = valRange{minimum: r.value + 1, maximum: keyvals[r.key].maximum}
+				sum += checkParts(workflows, newKeyvals, r.destination)
+				keyvals[r.key] = valRange{minimum: keyvals[r.key].minimum, maximum: r.value}
+
+			}
 		}
-		if checksOut {
-			return checkParts(workflows, keyvals, r.destination)
-		}
+
 	}
-	return checkParts(workflows, keyvals, wf.destination)
+	return sum + checkParts(workflows, keyvals, wf.destination)
 }
 
 func main() {
@@ -72,25 +96,10 @@ func main() {
 		}
 		workflows[text[:begin]] = workflow{rules: rules, destination: parts[len(parts)-1]}
 	}
-	sum := 0
-	for scanner.Scan() {
-		keyvals := make(map[byte]int)
-		text := scanner.Text()
-		s := strings.Split(text[1:len(text)-1], ",")
-		for _, v := range s {
-			value, err := strconv.Atoi(v[2:])
-			if err != nil {
-				return
-			}
-			keyvals[v[0]] = value
-		}
-		if checkParts(workflows, keyvals, "in") {
-			for _, v := range keyvals {
-				sum += v
-			}
-		}
-
-	}
-
-	fmt.Println(sum)
+	keyvals := make(map[byte]valRange)
+	keyvals['x'] = valRange{minimum: 1, maximum: 4000}
+	keyvals['m'] = valRange{minimum: 1, maximum: 4000}
+	keyvals['a'] = valRange{minimum: 1, maximum: 4000}
+	keyvals['s'] = valRange{minimum: 1, maximum: 4000}
+	fmt.Println(checkParts(workflows, keyvals, "in"))
 }
